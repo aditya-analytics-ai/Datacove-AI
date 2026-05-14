@@ -1,0 +1,27 @@
+version: "3.9"
+
+# Development docker-compose
+# Uses root docker-compose.yml for production
+# This is for local development only
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - JWT_SECRET=dev-secret-32-chars-minimum!!
+      - AUTH_ENABLED=false
+      - MYSQL_URL=
+      - REDIS_URL=
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  uploads:

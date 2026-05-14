@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+datasets/
+uploads/
+/tmp/
+venv/
+.venv/
+node_modules/
+Lib/
+Scripts/
+site-packages/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+-e 
+# Backups & editor artifacts
+*.bak
+*.swp
+*.orig
+*~

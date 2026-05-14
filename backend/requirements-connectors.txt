@@ -1,0 +1,20 @@
+# Optional connectors — for external data integrations
+# Install only if needed: pip install -r requirements-connectors.txt
+# NOTE: Some of these packages have native dependencies that may not work
+#       on ARM (Apple Silicon) or lightweight environments. Use with caution.
+
+# Database connectors
+psycopg2-binary>=2.9.0        # PostgreSQL
+pymongo>=4.6.0                 # MongoDB
+snowflake-sqlalchemy>=1.4.0    # Snowflake
+google-cloud-bigquery>=3.20.0  # BigQuery
+kafka-python>=2.0.0            # Kafka (batch mode)
+
+# ⚠️  ARM/Lightweight environment notes:
+# - snowflake-sqlalchemy may require additional native libs
+# - Kafka-python has known issues on ARM (use-confluent-kafka instead)
+# - For MongoDB on ARM, prefer the official MongoDB Docker image
+#
+# To detect ARM at install time:
+#   python -c "import platform; print(platform.machine())"
+# If 'arm64' or 'aarch64', consider skipping these or using Docker alternatives

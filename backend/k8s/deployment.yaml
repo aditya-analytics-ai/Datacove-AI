@@ -1,0 +1,138 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datacove
+  labels:
+    app: datacove
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: datacove-config
+  namespace: datacove
+data:
+  MYSQL_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:3306/${MYSQL_DATABASE}"
+  REDIS_URL: "redis://redis:6379/0"
+  AI_PROVIDER: "${AI_PROVIDER}"
+  OPENAI_API_KEY: "${OPENAI_API_KEY}"
+  ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+  GEMINI_API_KEY: "${GEMINI_API_KEY}"
+  STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+  STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET}"
+  CORS_ORIGINS: "${CORS_ORIGINS}"
+  SESSION_TTL_SECONDS: "3600"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: datacove-secrets
+  namespace: datacove
+type: Opaque
+stringData:
+  MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+  REDIS_PASSWORD: "${REDIS_PASSWORD}"
+  OPENAI_API_KEY: "${OPENAI_API_KEY}"
+  ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+  STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datacove-api
+  namespace: datacove
+  labels:
+    app: datacove
+    tier: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: datacove
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: datacove
+        tier: api
+    spec:
+      containers:
+      - name: api
+        image: datacove/api:${VERSION}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: datacove-config
+        - secretRef:
+            name: datacove-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: datacove-uploads
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: datacove-api-hpa
+  namespace: datacove
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: datacove-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max

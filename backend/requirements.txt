@@ -1,0 +1,62 @@
+# Core — Required for all deployments
+# Run: pip install -r requirements.txt
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+pydantic==2.7.1
+pydantic-settings==2.3.0
+
+# Data processing
+pandas==2.2.2
+numpy==1.26.4
+openpyxl==3.1.2
+scipy>=1.11.0
+python-dateutil>=2.9.0
+
+# SQL engine
+duckdb>=0.10.0
+
+# Fuzzy deduplication
+rapidfuzz>=3.6.0
+
+# MinHash LSH (scalable fuzzy dedup)
+datasketch>=1.6.4
+
+# ML
+scikit-learn>=1.4.0
+
+# Time-series anomaly detection
+statsmodels>=0.14.0
+
+# AI
+anthropic>=0.28.0
+openai==1.30.1
+google-generativeai>=0.7.0
+
+# Parquet support (Redis session store + export)
+pyarrow>=14.0.0
+
+# MySQL driver
+mysql-connector-python>=8.3.0
+
+# HTTP client
+httpx>=0.27.0
+sqlalchemy>=2.0.0
+gspread>=6.0.0
+google-auth>=2.29.0
+
+# Scheduling
+apscheduler>=3.10.0
+croniter>=1.4.0
+
+# Distributed processing for large files
+dask[dataframe]>=2024.1.0
+distributed>=2024.1.0
+
+# S3 connector
+boto3>=1.34.0
+
+# Dev / Testing
+pytest>=7.0.0
+nltk>=3.9.0
+chardet>=5.0.0

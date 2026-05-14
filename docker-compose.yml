@@ -1,0 +1,171 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Datacove — Production docker-compose
+#
+# Usage:
+#   cp backend/.env.example backend/.env   # fill in your secrets
+#   docker-compose up -d
+#
+# Services:
+#   mysql     — persistent dataset metadata + auth DB
+#   redis     — Celery broker + result backend + session store
+#   backend   — FastAPI app (2 uvicorn workers)
+#   worker    — Celery worker (AI agent, uploads, transforms)
+#   frontend  — Nginx serving built React app
+#
+# Volumes:
+#   mysql_data    — persistent MySQL data
+#   redis_data    — persistent Redis AOF/RDB
+#   uploads       — uploaded files shared between backend + worker
+#   datasets      — processed dataset CSVs shared between backend + worker
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MySQL ──────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-rootpassword}"
+      MYSQL_DATABASE:      datacove
+      MYSQL_USER:          "${MYSQL_USER:-datacove_user}"
+      MYSQL_PASSWORD:      "${MYSQL_PASSWORD:-datacove_pass}"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Backend (FastAPI) ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      MYSQL_URL:   "mysql://${MYSQL_USER:-datacove_user}:${MYSQL_PASSWORD:-datacove_pass}@mysql:3306/datacove"
+      REDIS_URL:   "redis://redis:6379/0"
+      UPLOAD_DIR:  /app/uploads
+      DATASET_DIR: /app/datasets
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads:/app/uploads
+      - datasets:/app/datasets
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Celery Worker ──────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      celery -A worker.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      --queues=ai,uploads,transforms,celery
+      --hostname=worker@%h
+    env_file: ./backend/.env
+    environment:
+      MYSQL_URL:   "mysql://${MYSQL_USER:-datacove_user}:${MYSQL_PASSWORD:-datacove_pass}@mysql:3306/datacove"
+      REDIS_URL:   "redis://redis:6379/0"
+      UPLOAD_DIR:  /app/uploads
+      DATASET_DIR: /app/datasets
+    volumes:
+      - uploads:/app/uploads
+      - datasets:/app/datasets
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "celery", "-A", "worker.celery_app", "inspect", "ping",
+             "--destination", "worker@${HOSTNAME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ── Celery Beat (Scheduled Pipelines) ─────────────────────────────────────
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      celery -A worker.celery_app beat
+      --loglevel=info
+      --scheduler celery.beat:PersistentScheduler
+    env_file: ./backend/.env
+    environment:
+      MYSQL_URL:   "mysql://${MYSQL_USER:-datacove_user}:${MYSQL_PASSWORD:-datacove_pass}@mysql:3306/datacove"
+      REDIS_URL:   "redis://redis:6379/0"
+    depends_on:
+      - redis
+      - mysql
+
+  # ── Frontend (Nginx) ───────────────────────────────────────────────────────
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+
+volumes:
+  mysql_data:
+  redis_data:
+  uploads:
+  datasets:

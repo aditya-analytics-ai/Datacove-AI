@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: datacove-worker
+  namespace: datacove
+  labels:
+    app: datacove
+    tier: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: datacove
+      tier: worker
+  template:
+    metadata:
+      labels:
+        app: datacove
+        tier: worker
+    spec:
+      containers:
+      - name: worker
+        image: datacove/api:${VERSION}
+        imagePullPolicy: Always
+        command: ["python", "worker.py"]
+        envFrom:
+        - configMapRef:
+            name: datacove-config
+        - secretRef:
+            name: datacove-secrets
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: datacove-uploads
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: datacove-worker-hpa
+  namespace: datacove
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: datacove-worker
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: redis_queue_length
+        selector:
+          matchLabels:
+            queue: datacove-tasks
+      target:
+        type: AverageValue
+        averageValue: "10"
