@@ -348,6 +348,9 @@ def _to_mysql(sql: str) -> str:
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
+# db is a *lazy* proxy: the real Database object is created on first use.
+# This means importing `utils.db` never raises even when MYSQL_URL is absent
+# (e.g. in unit tests that monkeypatch the db object before any method call).
 
 
 def _build_db() -> Database:
@@ -363,4 +366,18 @@ def _build_db() -> Database:
     return Database(url)
 
 
-db = _build_db()
+class _LazyDB:
+    """Proxy that initialises the real Database on first attribute access."""
+
+    _real: "Database | None" = None
+
+    def _get(self) -> Database:
+        if self._real is None:
+            self._real = _build_db()
+        return self._real
+
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)
+
+
+db: Database = _LazyDB()  # type: ignore[assignment]

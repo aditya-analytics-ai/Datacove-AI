@@ -107,12 +107,12 @@ jobs:
           docker run -d --name test-backend \
             -e JWT_SECRET=ci-test-secret-that-is-long-enough-32chars \
             -e AUTH_ENABLED=False \
-            -e MYSQL_URL="mysql://testuser:testpass@mysql:3306/testdb" \
-            -e REDIS_URL="redis://redis:6379/0" \
-            -p 8000:8000 \
+            -e MYSQL_URL="mysql://testuser:testpass@127.0.0.1:3306/testdb" \
+            -e REDIS_URL="redis://127.0.0.1:6379/0" \
             --network host \
             datacove-backend
-          sleep 15
+          # Wait for uvicorn + DB migration to finish
+          sleep 20
 
       - name: Check health endpoint returns healthy status
         run: |
